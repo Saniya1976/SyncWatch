@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { PlaybackState, Role } from '../types';
-import { Volume2, VolumeX, AlertCircle } from 'lucide-react';
+import { VolumeX } from 'lucide-react';
 
 declare global {
   interface Window {
@@ -24,20 +24,148 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   onLocalPause,
   onLocalSeek,
 }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
   const isApiReadyRef = useRef<boolean>(false);
   const isApplyingRemoteRef = useRef<boolean>(false);
-  const lastKnownTimeRef = useRef<number>(0);
   const driftIntervalRef = useRef<any>(null);
+  const currentVideoIdRef = useRef<string | null>(null);
 
   const [isPlayerReady, setIsPlayerReady] = useState<boolean>(false);
-  const [isMuted, setIsMuted] = useState<boolean>(false);
   const [hasAutoplayBlocked, setHasAutoplayBlocked] = useState<boolean>(false);
 
   const canControl = userRole === 'HOST' || userRole === 'MODERATOR';
 
-  // Load YouTube IFrame API script once
+  // Synchronize player with authoritative state
+  const syncPlayerWithState = useCallback((state: PlaybackState, isInitial = false) => {
+    const player = playerRef.current;
+    if (!player || typeof player.getPlayerState !== 'function') return;
+
+    isApplyingRemoteRef.current = true;
+
+    try {
+      // Calculate estimated time if currently playing
+      let targetTime = state.currentTime || 0;
+      if (state.isPlaying && state.updatedAt) {
+        const elapsed = (Date.now() - state.updatedAt) / 1000;
+        targetTime += elapsed;
+      }
+
+      const nextVideoId = state.videoId || 'dQw4w9WgXcQ';
+      const isNewVideo = currentVideoIdRef.current !== nextVideoId;
+
+      if (isNewVideo || isInitial) {
+        currentVideoIdRef.current = nextVideoId;
+        if (state.isPlaying) {
+          if (typeof player.loadVideoById === 'function') {
+            player.loadVideoById(nextVideoId, Math.max(0, targetTime));
+          }
+        } else {
+          if (typeof player.cueVideoById === 'function') {
+            player.cueVideoById(nextVideoId, Math.max(0, targetTime));
+          }
+        }
+      } else {
+        // Drift correction: if local time differs by > 1.5s, seek
+        const currentLocalTime = player.getCurrentTime ? player.getCurrentTime() : 0;
+        const drift = Math.abs(currentLocalTime - targetTime);
+
+        if (drift > 1.5) {
+          player.seekTo(Math.max(0, targetTime), true);
+        }
+
+        // Apply play/pause state
+        const playerState = player.getPlayerState();
+        // 1 = PLAYING, 2 = PAUSED
+        if (state.isPlaying && playerState !== 1) {
+          const playPromise = player.playVideo();
+          if (playPromise && typeof playPromise.catch === 'function') {
+            playPromise.catch(() => setHasAutoplayBlocked(true));
+          }
+        } else if (!state.isPlaying && playerState === 1) {
+          player.pauseVideo();
+        }
+      }
+    } catch (err) {
+      console.warn('[YouTube Player] Error during sync:', err);
+    } finally {
+      setTimeout(() => {
+        isApplyingRemoteRef.current = false;
+      }, 500);
+    }
+  }, []);
+
+  // Handle local user actions on player
+  const handlePlayerStateChange = useCallback((event: any) => {
+    if (isApplyingRemoteRef.current) return;
+    if (!canControl) return;
+
+    const state = event.data;
+    const player = playerRef.current;
+    if (!player || typeof player.getCurrentTime !== 'function') return;
+
+    try {
+      const currentTime = player.getCurrentTime() || 0;
+
+      // YT.PlayerState.PLAYING = 1
+      if (state === 1) {
+        onLocalPlay?.(currentTime);
+      }
+      // YT.PlayerState.PAUSED = 2
+      else if (state === 2) {
+        onLocalPause?.(currentTime);
+      }
+    } catch (err) {
+      console.warn('[YouTube Player] Error handling state change:', err);
+    }
+  }, [canControl, onLocalPlay, onLocalPause]);
+
+  // Safely initialize YouTube player without React DOM collision
+  const initPlayer = useCallback(() => {
+    if (!isApiReadyRef.current || !wrapperRef.current || playerRef.current) return;
+
+    try {
+      // Clear container and create an inner unmanaged element for YouTube to replace
+      wrapperRef.current.innerHTML = '';
+      const mountElement = document.createElement('div');
+      mountElement.style.width = '100%';
+      mountElement.style.height = '100%';
+      wrapperRef.current.appendChild(mountElement);
+
+      const initialVideoId = playbackState.videoId || 'dQw4w9WgXcQ';
+      currentVideoIdRef.current = initialVideoId;
+
+      playerRef.current = new window.YT.Player(mountElement, {
+        videoId: initialVideoId,
+        width: '100%',
+        height: '100%',
+        playerVars: {
+          autoplay: playbackState.isPlaying ? 1 : 0,
+          controls: canControl ? 1 : 0,
+          disablekb: canControl ? 0 : 1,
+          modestbranding: 1,
+          rel: 0,
+          playsinline: 1,
+          enablejsapi: 1,
+          origin: window.location.origin,
+        },
+        events: {
+          onReady: () => {
+            setIsPlayerReady(true);
+            syncPlayerWithState(playbackState, true);
+          },
+          onStateChange: handlePlayerStateChange,
+          onError: (err: any) => {
+            console.warn('[YouTube Player] Player error:', err);
+          },
+        },
+      });
+    } catch (err) {
+      console.error('[YouTube Player] Initialization exception:', err);
+    }
+  }, [canControl, handlePlayerStateChange, playbackState, syncPlayerWithState]);
+
+  // Load YouTube script once
   useEffect(() => {
     if (window.YT && window.YT.Player) {
       isApiReadyRef.current = true;
@@ -60,120 +188,18 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       isApiReadyRef.current = true;
       initPlayer();
     };
-  }, []);
 
-  const initPlayer = useCallback(() => {
-    if (!isApiReadyRef.current || !containerRef.current || playerRef.current) return;
-
-    const initialVideoId = playbackState.videoId || 'dQw4w9WgXcQ';
-
-    playerRef.current = new window.YT.Player(containerRef.current, {
-      videoId: initialVideoId,
-      playerVars: {
-        autoplay: playbackState.isPlaying ? 1 : 0,
-        controls: canControl ? 1 : 0, // Disable native YouTube controls for regular participants to enforce backend sync
-        disablekb: canControl ? 0 : 1, // Disable keyboard controls if not host/mod
-        modestbranding: 1,
-        rel: 0,
-        playsinline: 1,
-        origin: window.location.origin,
-      },
-      events: {
-        onReady: (event: any) => {
-          setIsPlayerReady(true);
-          syncPlayerWithState(playbackState, true);
-        },
-        onStateChange: handlePlayerStateChange,
-        onError: (err: any) => {
-          console.warn('[YouTube Player] Error:', err);
-        },
-      },
-    });
-  }, [canControl]);
-
-  // Handle local user actions on player
-  const handlePlayerStateChange = (event: any) => {
-    // If the state change was initiated by a server sync, ignore it to prevent loop
-    if (isApplyingRemoteRef.current) return;
-    if (!canControl) return;
-
-    const state = event.data;
-    const player = playerRef.current;
-    if (!player || typeof player.getCurrentTime !== 'function') return;
-
-    const currentTime = player.getCurrentTime();
-    lastKnownTimeRef.current = currentTime;
-
-    // YT.PlayerState.PLAYING = 1
-    if (state === 1) {
-      onLocalPlay?.(currentTime);
-    }
-    // YT.PlayerState.PAUSED = 2
-    else if (state === 2) {
-      onLocalPause?.(currentTime);
-    }
-  };
-
-  // Synchronize player with authoritative state
-  const syncPlayerWithState = useCallback((state: PlaybackState, isInitial = false) => {
-    const player = playerRef.current;
-    if (!player || typeof player.getPlayerState !== 'function') return;
-
-    isApplyingRemoteRef.current = true;
-
-    try {
-      // Calculate estimated time if currently playing
-      let targetTime = state.currentTime;
-      if (state.isPlaying && state.updatedAt) {
-        const elapsed = (Date.now() - state.updatedAt) / 1000;
-        targetTime += elapsed;
-      }
-
-      // Check if video changed
-      const currentUrl = player.getVideoUrl ? player.getVideoUrl() : '';
-      const currentVideoId = state.videoId;
-
-      if (currentVideoId && (!currentUrl.includes(currentVideoId) || isInitial)) {
-        if (state.isPlaying) {
-          player.loadVideoById({
-            videoId: currentVideoId,
-            startSeconds: Math.max(0, targetTime),
-          });
-        } else {
-          player.cueVideoById({
-            videoId: currentVideoId,
-            startSeconds: Math.max(0, targetTime),
-          });
-        }
-      } else {
-        // Drift correction: if local time differs by > 1.5s, seek
-        const currentLocalTime = player.getCurrentTime() || 0;
-        const drift = Math.abs(currentLocalTime - targetTime);
-
-        if (drift > 1.5 || isInitial) {
-          player.seekTo(Math.max(0, targetTime), true);
-        }
-
-        // Apply play/pause state
-        const playerState = player.getPlayerState();
-        if (state.isPlaying && playerState !== 1) {
-          const playPromise = player.playVideo();
-          if (playPromise && typeof playPromise.catch === 'function') {
-            playPromise.catch(() => {
-              setHasAutoplayBlocked(true);
-            });
-          }
-        } else if (!state.isPlaying && playerState === 1) {
-          player.pauseVideo();
+    return () => {
+      if (playerRef.current && typeof playerRef.current.destroy === 'function') {
+        try {
+          playerRef.current.destroy();
+          playerRef.current = null;
+        } catch {
+          // ignore
         }
       }
-    } finally {
-      // Release lock after a short buffer to allow YouTube API to settle
-      setTimeout(() => {
-        isApplyingRemoteRef.current = false;
-      }, 500);
-    }
-  }, []);
+    };
+  }, [initPlayer]);
 
   // Watch for state changes from backend
   useEffect(() => {
@@ -182,23 +208,27 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
   }, [playbackState, isPlayerReady, syncPlayerWithState]);
 
-  // Periodic drift check (every 3 seconds)
+  // Periodic drift check
   useEffect(() => {
     driftIntervalRef.current = setInterval(() => {
       if (!isPlayerReady || !playbackState.isPlaying || isApplyingRemoteRef.current) return;
       const player = playerRef.current;
       if (!player || typeof player.getCurrentTime !== 'function') return;
 
-      const elapsed = (Date.now() - playbackState.updatedAt) / 1000;
-      const expectedTime = playbackState.currentTime + elapsed;
-      const actualTime = player.getCurrentTime();
+      try {
+        const elapsed = (Date.now() - playbackState.updatedAt) / 1000;
+        const expectedTime = playbackState.currentTime + elapsed;
+        const actualTime = player.getCurrentTime();
 
-      if (Math.abs(actualTime - expectedTime) > 2.5) {
-        isApplyingRemoteRef.current = true;
-        player.seekTo(expectedTime, true);
-        setTimeout(() => {
-          isApplyingRemoteRef.current = false;
-        }, 400);
+        if (Math.abs(actualTime - expectedTime) > 2.5) {
+          isApplyingRemoteRef.current = true;
+          player.seekTo(expectedTime, true);
+          setTimeout(() => {
+            isApplyingRemoteRef.current = false;
+          }, 400);
+        }
+      } catch {
+        // ignore
       }
     }, 3000);
 
@@ -209,29 +239,33 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   const handleManualUnmute = () => {
     if (playerRef.current) {
-      playerRef.current.unMute();
-      playerRef.current.playVideo();
-      setIsMuted(false);
-      setHasAutoplayBlocked(false);
+      try {
+        playerRef.current.unMute();
+        playerRef.current.playVideo();
+        setHasAutoplayBlocked(false);
+      } catch {
+        // ignore
+      }
     }
   };
 
   return (
     <div className="relative w-full aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl border border-slate-800">
-      {/* Player container */}
-      <div ref={containerRef} className="w-full h-full" />
+      {/* Outer unmanaged container: React owns wrapperRef, inner mountElement is owned by YouTube */}
+      <div ref={wrapperRef} className="w-full h-full" />
 
-      {/* Overlay barrier for non-moderators so clicks do not desync the YouTube player */}
+      {/* Overlay barrier for non-moderators */}
       {!canControl && (
         <div
           className="absolute inset-0 z-10 cursor-not-allowed bg-transparent"
-          title="Playback is synchronized by the Room Host. Submit a request to change playback."
+          title="Playback is synchronized by the Room Host."
         />
       )}
 
       {/* Browser Autoplay Blocked Banner */}
       {hasAutoplayBlocked && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 px-4 py-2 bg-red-600/90 hover:bg-red-600 text-white text-sm font-medium rounded-full shadow-lg backdrop-blur cursor-pointer transition"
+        <div
+          className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 px-4 py-2 bg-red-600/90 hover:bg-red-600 text-white text-sm font-medium rounded-full shadow-lg backdrop-blur cursor-pointer transition"
           onClick={handleManualUnmute}
         >
           <VolumeX className="w-4 h-4 animate-pulse" />
@@ -251,4 +285,3 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     </div>
   );
 };
-

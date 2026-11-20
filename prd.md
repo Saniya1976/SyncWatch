@@ -690,3 +690,133 @@ Start by inspecting my existing repository and reporting:
 4. The exact first implementation steps.
 
 Then proceed with development stage by stage. Do not stop after giving me a plan—help implement the complete project.
+
+
+
+
+## 2. Implemented Architecture & Files
+Backend (server/)
+Participant.ts: Encapsulates user identity, connection state, and roles (HOST, MODERATOR, PARTICIPANT).
+Room.ts: Stores authoritative playback state (videoId, isPlaying, currentTime, updatedAt), participants, and the pending action-requests queue. Includes automatic drift/elapsed time calculation.
+RoomManager.ts: Manages in-memory rooms, unique 6-character room codes (e.g. RRMMWZ), and socket-to-room mappings.
+permissions.ts: Pure server-side permission validation functions (canControlPlayback, canAssignRoles, canRemoveParticipant, canResolveRequests).
+PlaybackService.ts: Validates and executes authoritative play, pause, seek, and change_video commands.
+RoomService.ts: Handles role promotion/demotion, participant removal, and the request/approval lifecycle (including preventing users from approving their own requests).
+MessageHandler.ts: Maps all Socket.IO client-to-server and server-to-client events with proper error responses and acknowledgements.
+youtube.ts: Validates and extracts 11-character YouTube video IDs from URLs (watch?v=..., youtu.be/..., embed/..., shorts/...).
+index.ts: Express server, /api/health, /api/rooms/:roomCode verification, and static frontend fallback.
+Frontend (client/)
+Home.tsx: Landing page with "Create Room" and "Join Room" flows.
+WatchRoom.tsx: Synchronized room page with live connection badge, room code sharing, and real-time toast feedback.
+VideoPlayer.tsx: YouTube IFrame Player API integration with loop prevention, drift correction (within 1.5s), and non-controller interaction barriers.
+RoomControls.tsx: Playback controls for Host/Mods (play, pause, seek, load video) or request button for viewers.
+ApprovalPanel.tsx: Real-time approval queue for Host and Moderators.
+RequestActionModal.tsx: Modal for participants to request play, pause, timestamp seeking, or video switching.
+ParticipantList.tsx: Displays participants with role badges, 1-click room code/invite link copy, and Host management (promote/demote/remove with confirmation).
+3. Verification & Test Results
+Production Builds:
+Client built successfully with Vite in 5.08s (client/dist).
+Server TypeScript compiled successfully with 0 errors (server/dist).
+Automated End-to-End Test (integration.test.mjs):
+text
+# ✔ Host client connected via WebSocket
+# ✔ Backend permission check passed: Unauthorized play blocked for Bob: [Unauthorized: Only Host and Moderators can start playback.]
+# ✔ Host promoted Bob to MODERATOR. Bob received event: [MODERATOR]
+# ✔ Bob as Moderator played video. Synchronized state broadcast: isPlaying=[true], currentTime=[25]
+# ✔ Charlie joined as Participant
+# ✔ Host received Charlie's request: [SEEK] for target [120s]
+# ✔ Request approved: [APPROVED] by [Alice (Host)]
+# ✔ Synchronized playback executed after approval: currentTime=[120s]
+--- ALL INTEGRATION TESTS PASSED PERFECTLY ---
+Git Initialization:
+Local Git repository initialized on branch main.
+Initial commit created (86d7247) covering all source files and README.md.
+
+
+
+### 1. Where WebSockets Are Applied
+
+We use **Socket.IO over WebSockets** for real-time bidirectional communication.
+
+#### A. Backend
+1. **Server Initialization** — [server/src/socket.ts](file:///\\wsl.localhost\Ubuntu-22.04\home\sassysanya\web3task_assignment\server\src\socket.ts):
+   - Mounts the Socket.IO WebSocket server directly onto the Node HTTP server.
+   - Configures connection timeouts, CORS, and heartbeat pings (`pingInterval: 10000`).
+2. **Event Router & Broadcaster** — [server/src/handlers/MessageHandler.ts](file:///\\wsl.localhost\Ubuntu-22.04\home\sassysanya\web3task_assignment\server\src\handlers\MessageHandler.ts):
+   - **Incoming Client Events**: `create_room`, `join_room`, `leave_room`, `play`, `pause`, `seek`, `change_video`, `assign_role`, `remove_participant`, `request_action`, `approve_request`, `reject_request`.
+   - **Room Channels**: Uses `socket.join("room:" + roomCode)` so events only reach users in that specific watch party.
+   - **Outgoing Broadcasts**: Emits `sync_state`, `user_joined`, `user_left`, `role_assigned`, `action_requested`, `request_resolved`, and `operation_error`.
+3. **HTTP Server Entry** — [server/src/index.ts](file:///\\wsl.localhost\Ubuntu-22.04\home\sassysanya\web3task_assignment\server\src\index.ts):
+   - Combines Express REST endpoints, static React frontend hosting, and WebSocket connections on the **same port** (`5000`).
+
+#### B. Frontend
+1. **Singleton Socket Client** — [client/src/services/socket.ts](file:///\\wsl.localhost\Ubuntu-22.04\home\sassysanya\web3task_assignment\client\src\services\socket.ts):
+   - Manages one shared WebSocket connection to prevent duplicate connections.
+2. **Room Orchestration** — [client/src/pages/WatchRoom.tsx](file:///\\wsl.localhost\Ubuntu-22.04\home\sassysanya\web3task_assignment\client\src\pages\WatchRoom.tsx):
+   - Connects to the room channel and listens for incoming WebSocket events (`sync_state`, `user_joined`, `user_left`, etc.).
+   - Dispatches user actions (play, pause, seek, promote, approve) back through the socket.
+3. **Synchronized Player** — [client/src/components/VideoPlayer.tsx](file:///\\wsl.localhost\Ubuntu-22.04\home\sassysanya\web3task_assignment\client\src\components\VideoPlayer.tsx):
+   - Receives authoritative `sync_state` over WebSockets, calculates drift, and synchronizes the YouTube IFrame player.
+
+---
+
+### 2. How to See If It's Working
+
+#### Method 1: The Automated Integration Test (Quickest — takes 2 seconds)
+An end-to-end WebSocket test script is included in [server/src/tests/integration.test.mjs](file:///\\wsl.localhost\Ubuntu-22.04\home\sassysanya\web3task_assignment\server\src\tests\integration.test.mjs). It opens 3 concurrent WebSocket clients (`Alice`, `Bob`, `Charlie`), creates a room, tests role permissions, tests video playback sync, and tests the request/approval flow.
+
+Run this command in your terminal:
+```bash
+npm test
+```
+**Output you will see:**
+```text
+✔ Host client connected via WebSocket
+✔ Room created successfully: [RRMMWZ], Host Role: [HOST]
+✔ Bob joined room. Host received notification: [Bob]
+✔ Bob assigned default role: [PARTICIPANT]
+✔ Backend permission check passed: Unauthorized play blocked for Bob
+✔ Host promoted Bob to MODERATOR
+✔ Bob as Moderator played video. Synchronized state broadcast: isPlaying=[true]
+✔ Charlie joined as Participant
+✔ Host received Charlie's request: [SEEK] for target [120s]
+✔ Request approved: [APPROVED] by [Alice (Host)]
+✔ Synchronized playback executed after approval: currentTime=[120s]
+--- ALL INTEGRATION TESTS PASSED PERFECTLY ---
+```
+
+---
+
+#### Method 2: Visual Browser Test (2 Windows Side-by-Side)
+
+1. **Start the development server**:
+   ```bash
+   npm run dev
+   ```
+2. **Open Window 1**:
+   - Go to `http://localhost:5173`.
+   - Type your name (e.g. `Alice`) and click **Create Room**.
+   - You will see the watch room with a room code badge (e.g. `ABC123`) and a green `Connected` indicator in the header.
+3. **Open Window 2 (Incognito / Second Window)**:
+   - Go to `http://localhost:5173`.
+   - Enter the room code and join as `Bob`.
+4. **Observe Real-Time WebSockets in Action**:
+   - **Instant Presence**: Window 1 immediately shows `Bob` appearing in the participant list without page reload.
+   - **Synchronized Playback**: When Alice clicks **Play**, Bob's player starts playing at the exact same second.
+   - **Permission Guard**: Bob has no play/pause buttons (prevented on backend).
+   - **Request System**: Bob clicks **"Request Playback Action"** -> Alice immediately sees a yellow pending request banner with **Approve** and **Reject** buttons.
+   - **Instant Execution**: Alice clicks **Approve** -> The requested action executes simultaneously in both windows.
+
+---
+
+#### Method 3: Browser DevTools (Inspect the Actual Frames)
+
+1. Open your browser DevTools (<kbd>F12</kbd> or <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd>).
+2. Go to the **Network** tab.
+3. Click the **WS** (WebSockets) filter at the top.
+4. Refresh or open the room page.
+5. Click on the connection row: `socket.io/?EIO=4&transport=websocket...`.
+6. Select the **Messages** (or **Frames**) sub-tab.
+7. You will see real-time WebSocket frames streaming back and forth:
+   - `42["play",{"roomCode":"ABC123","currentTime":15}]`
+   - `42["sync_state",{"videoId":"dQw4w9WgXcQ","isPlaying":true,"currentTime":15}]`

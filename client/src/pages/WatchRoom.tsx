@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getSocket } from '../services/socket';
 import {
   RoomStateResponse,
@@ -16,6 +16,7 @@ import { ParticipantList } from '../components/ParticipantList';
 import { RoomControls } from '../components/RoomControls';
 import { ApprovalPanel } from '../components/ApprovalPanel';
 import { RequestActionModal } from '../components/RequestActionModal';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import {
   Tv,
   ArrowLeft,
@@ -29,8 +30,10 @@ import {
 export const WatchRoom: React.FC = () => {
   const { roomCode } = useParams<{ roomCode: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const initialRoomState = (location.state as any)?.initialRoomState as RoomStateResponse | undefined;
 
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(!initialRoomState);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'info' | 'success' | 'warning' } | null>(null);
 
@@ -38,17 +41,25 @@ export const WatchRoom: React.FC = () => {
   const [isConnected, setIsConnected] = useState(false);
 
   // Authoritative Room state
-  const [roomState, setRoomState] = useState<RoomStateResponse | null>(null);
-  const [playbackState, setPlaybackState] = useState<PlaybackState>({
-    videoId: 'dQw4w9WgXcQ',
-    isPlaying: false,
-    currentTime: 0,
-    updatedAt: Date.now(),
-  });
-  const [participants, setParticipants] = useState<ParticipantSummary[]>([]);
-  const [pendingRequests, setPendingRequests] = useState<PendingActionRequest[]>([]);
-  const [userRole, setUserRole] = useState<Role>('PARTICIPANT');
-  const [currentParticipantId, setCurrentParticipantId] = useState<string>('');
+  const [roomState, setRoomState] = useState<RoomStateResponse | null>(initialRoomState || null);
+  const [playbackState, setPlaybackState] = useState<PlaybackState>(
+    initialRoomState?.playbackState || {
+      videoId: 'dQw4w9WgXcQ',
+      isPlaying: false,
+      currentTime: 0,
+      updatedAt: Date.now(),
+    }
+  );
+  const [participants, setParticipants] = useState<ParticipantSummary[]>(
+    initialRoomState?.participants || []
+  );
+  const [pendingRequests, setPendingRequests] = useState<PendingActionRequest[]>(
+    initialRoomState?.pendingRequests || []
+  );
+  const [userRole, setUserRole] = useState<Role>(initialRoomState?.currentRole || 'PARTICIPANT');
+  const [currentParticipantId, setCurrentParticipantId] = useState<string>(
+    initialRoomState?.currentParticipantId || ''
+  );
 
   // Modals
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
@@ -323,13 +334,15 @@ export const WatchRoom: React.FC = () => {
       <main className="max-w-7xl mx-auto w-full p-4 sm:p-6 flex-1 flex flex-col lg:flex-row gap-6">
         {/* Left: Video Player & Playback Controls */}
         <div className="flex-1 flex flex-col space-y-4">
-          <VideoPlayer
-            playbackState={playbackState}
-            userRole={userRole}
-            onLocalPlay={handlePlay}
-            onLocalPause={handlePause}
-            onLocalSeek={handleSeek}
-          />
+          <ErrorBoundary fallbackTitle="YouTube Video Player">
+            <VideoPlayer
+              playbackState={playbackState}
+              userRole={userRole}
+              onLocalPlay={handlePlay}
+              onLocalPause={handlePause}
+              onLocalSeek={handleSeek}
+            />
+          </ErrorBoundary>
 
           <RoomControls
             playbackState={playbackState}

@@ -73,6 +73,16 @@ export class RoomManager {
       return { error: 'Room does not exist or has expired.' };
     }
 
+    // If participant is already in room (e.g. host who just created it), preserve their role
+    const existing = room.getParticipant(socketId);
+    if (existing) {
+      if (displayName && displayName.trim()) {
+        existing.displayName = displayName.trim();
+      }
+      existing.setOnline(true);
+      return { room, participant: existing };
+    }
+
     const cleanName = displayName.trim() || `User_${socketId.slice(-4)}`;
     const participant = new Participant(socketId, cleanName, 'PARTICIPANT');
 

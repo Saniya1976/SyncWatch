@@ -39,7 +39,7 @@ export const Home: React.FC = () => {
       (res: SocketAckResponse<RoomStateResponse>) => {
         setIsCreating(false);
         if (res.success && res.data) {
-          navigate(`/room/${res.data.roomCode}`);
+          navigate(`/room/${res.data.roomCode}`, { state: { initialRoomState: res.data } });
         } else {
           setErrorMessage(res.error || 'Failed to create room. Please try again.');
         }
