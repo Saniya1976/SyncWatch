@@ -1,0 +1,21 @@
+{
+  "name": "youtube-watch-party",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Real-time synchronized YouTube Watch Party with host/moderator permissions and participant request approval",
+  "scripts": {
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "build:client": "npm run build --prefix client",
+    "build:server": "npm run build --prefix server",
+    "build": "npm run build:client && npm run build:server",
+    "test": "node server/src/tests/integration.test.mjs",
+    "start": "npm run start --prefix server",
+    "install:all": "npm install && npm install --prefix server && npm install --prefix client"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
+
