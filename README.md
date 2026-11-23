@@ -93,20 +93,20 @@ flowchart TD
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Host as Host
-    participant Client as Host Client
-    participant Server as Socket.IO Server
-    participant ViewerClient as Viewer Client
-    actor Viewer as Participant
+    actor H as Host
+    participant HC as Host Client
+    participant S as Socket.IO Server
+    participant VC as Viewer Client
+    actor V as Participant
 
-    Host->>Client: Clicks Play, Pause, Seek, or Change Video
-    Client->>Server: Emits playback event with timestamp
-    Server->>Server: Validate actor permissions
-    Server->>Server: Update authoritative room state
-    Server->>Client: Broadcast sync_state
-    Server->>ViewerClient: Broadcast sync_state
-    ViewerClient->>ViewerClient: Apply state to YouTube Player
-    ViewerClient->>Viewer: Synchronized playback
+    H->>HC: Clicks Play, Pause, Seek, or Change Video
+    HC->>S: Emits playback event with timestamp
+    S->>S: Validate actor permissions
+    S->>S: Update authoritative room state
+    S->>HC: Broadcast sync_state
+    S->>VC: Broadcast sync_state
+    VC->>VC: Apply state to YouTube Player
+    VC->>V: Synchronized playback
 ```
 
 ---
@@ -116,21 +116,21 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Participant as Participant
-    participant PClient as Participant Client
-    participant Server as Socket.IO Server
-    participant HClient as Host Client
-    actor Host as Host
+    actor V as Participant
+    participant VC as Viewer Client
+    participant S as Socket.IO Server
+    participant HC as Host Client
+    actor H as Host
 
-    Participant->>PClient: Requests Seek or Change Video
-    PClient->>Server: Emits request_action
-    Server->>Server: Validate request and store in pending queue
-    Server->>HClient: Broadcast action_requested
-    Host->>HClient: Clicks Approve in Approval Panel
-    HClient->>Server: Emits approve_request
-    Server->>Server: Verify actor and apply to playback state
-    Server->>PClient: Broadcast request_resolved and sync_state
-    Server->>HClient: Broadcast request_resolved and sync_state
+    V->>VC: Requests Seek or Change Video
+    VC->>S: Emits request_action
+    S->>S: Validate request and store in pending queue
+    S->>HC: Broadcast action_requested
+    H->>HC: Clicks Approve in Approval Panel
+    HC->>S: Emits approve_request
+    S->>S: Verify actor and apply to playback state
+    S->>VC: Broadcast request_resolved and sync_state
+    S->>HC: Broadcast request_resolved and sync_state
 ```
 
 ---
