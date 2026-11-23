@@ -2,6 +2,8 @@
 
 > A full-stack, real-time synchronized YouTube watch party application built with **React**, **Express**, **TypeScript**, and **Socket.IO**. Designed with authoritative backend playback state, strict role-based permission enforcement, and an interactive participant action-request approval queue.
 
+**Live Application Demo**: [https://syncwatch-party.onrender.com](https://syncwatch-party.onrender.com) *(Update with your deployed Render service URL)*
+
 ---
 
 ## 1. Project Overview
@@ -78,9 +80,9 @@ flowchart TD
 
 | Role | Play / Pause | Seek | Change Video | Assign Roles | Remove Participants | Approve Requests |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **HOST** |  |  |  |  (to Moderator/Participant) |  (anyone except self) |  |
-| **MODERATOR** |  |  |  |  |  (Participants only) |  |
-| **PARTICIPANT** |  *(Request only)* |  *(Request only)* |  *(Request only)* |  |  |  |
+| **HOST** | ✅ Allowed | ✅ Allowed | ✅ Allowed | ✅ (to Moderator/Participant) | ✅ (anyone except self) | ✅ Allowed |
+| **MODERATOR** | ✅ Allowed | ✅ Allowed | ✅ Allowed | ❌ Denied | ✅ (Participants only) | ✅ Allowed |
+| **PARTICIPANT** | ❌ *(Request only)* | ❌ *(Request only)* | ❌ *(Request only)* | ❌ Denied | ❌ Denied | ❌ Denied |
 
 > **Backend Enforcement**: Even if a malicious user emits a `play`, `pause`, `seek`, or `change_video` event, the server verifies `canControlPlayback(participant.role)`. Unauthorized calls are immediately rejected with an `operation_error` event.
 
@@ -269,15 +271,22 @@ npm start
 ```
 The server will start on `process.env.PORT || 5000` and automatically serve the built client application and WebSocket connections from the same origin!
 
-### Deploying to Render
-1. Create a new **Web Service** on Render.
-2. Link your Git repository.
-3. Set the following build and start commands:
-   - **Build Command**: `npm install && npm install --prefix server && npm install --prefix client && npm run build`
+### Deploying to Render (Step-by-Step)
+1. Push your repository to GitHub.
+2. Log into [Render](https://render.com) and click **New +** -> **Web Service**.
+3. Connect your GitHub repository.
+4. Configure the Web Service settings:
+   - **Name**: `syncwatch-party` (or your chosen name)
+   - **Environment**: `Node`
+   - **Region**: Any (e.g. `Oregon (US West)` or `Singapore`)
+   - **Branch**: `main`
+   - **Build Command**: `npm run render-build`
    - **Start Command**: `npm start`
-4. Set Environment Variables:
+5. Under **Environment Variables**, add:
    - `NODE_ENV`: `production`
-   - `PORT`: `10000` (or leave default, Render sets `PORT` automatically)
+   *(Render automatically assigns `PORT` and provides SSL out of the box).*
+6. Click **Deploy Web Service**. Render will execute `npm run render-build` (which installs all required dependencies including dev/build tools and builds both frontend and backend), then start the unified Express + Socket.IO server.
+7. Once deployment finishes, copy the live URL (e.g. `https://syncwatch-party.onrender.com`) and paste it at the top of this `README.md`.
 
 ---
 
