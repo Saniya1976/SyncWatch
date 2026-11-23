@@ -54,6 +54,18 @@ export interface SendChatPayload {
   text: string;
 }
 
+export interface SendReactionPayload {
+  roomCode: string;
+  emoji: string;
+}
+
+export interface ReactionEvent {
+  id: string;
+  emoji: string;
+  senderName: string;
+  timestamp: number;
+}
+
 export interface RoomStateResponse {
   roomCode: string;
   hostId: string;

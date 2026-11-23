@@ -94,6 +94,9 @@ export const WatchRoom: React.FC = () => {
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [isMobilePanelOpen, setIsMobilePanelOpen] = useState(false);
 
+  // Live Floating Emoji Reactions
+  const [reactions, setReactions] = useState<Array<{ id: string; emoji: string; senderName: string; x: number }>>([]);
+
   // Modals
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
   const [isNamePromptOpen, setIsNamePromptOpen] = useState(false);
@@ -308,6 +311,20 @@ export const WatchRoom: React.FC = () => {
       }
     });
 
+    // Live floating reaction emojis
+    socket.on('new_reaction', (reaction: { id: string; emoji: string; senderName: string; timestamp: number }) => {
+      const newReaction = {
+        id: reaction.id || crypto.randomUUID(),
+        emoji: reaction.emoji,
+        senderName: reaction.senderName,
+        x: Math.floor(Math.random() * 65) + 15,
+      };
+      setReactions((prev) => [...prev.slice(-15), newReaction]);
+      setTimeout(() => {
+        setReactions((prev) => prev.filter((r) => r.id !== newReaction.id));
+      }, 2600);
+    });
+
     socket.on('operation_error', ({ message }: { code: string; message: string }) => {
       showToast(message, 'warning');
     });
@@ -330,9 +347,17 @@ export const WatchRoom: React.FC = () => {
       socket.off('action_requested');
       socket.off('request_resolved');
       socket.off('new_chat');
+      socket.off('new_reaction');
       socket.off('operation_error');
     };
   }, [joinCurrentRoom, navigate, roomCode, showToast]);
+
+  const handleSendReaction = (emoji: string) => {
+    const socket = getSocket();
+    const cleanCode = (roomCode || roomState?.roomCode || '').trim().toUpperCase();
+    if (!cleanCode) return;
+    socket.emit('send_reaction', { roomCode: cleanCode, emoji });
+  };
 
   // Host/Mod Playback Commands
   const handlePlay = (time?: number) => {
@@ -605,6 +630,8 @@ export const WatchRoom: React.FC = () => {
                 onLocalPause={handlePause}
                 onLocalSeek={handleSeek}
                 onVideoInfo={(info) => setVideoInfo(info)}
+                reactions={reactions}
+                onSendReaction={handleSendReaction}
               />
             </ErrorBoundary>
           </div>

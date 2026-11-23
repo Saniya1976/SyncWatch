@@ -126,7 +126,11 @@ export const ParticipantList: React.FC<ParticipantListProps> = ({
       <div className="flex-1 overflow-y-auto p-2.5 space-y-1.5">
         {sortedParticipants.map((p) => {
           const isSelf = p.id === currentParticipantId;
-          const canManage = isHost && !isSelf;
+          const isModerator = userRole === 'MODERATOR';
+          const canRemove = !isSelf && (isHost || (isModerator && p.role === 'PARTICIPANT'));
+          const canPromoteDemote = isHost && !isSelf;
+          const canTransferHost = isHost && !isSelf;
+          const hasAnyAction = canRemove || canPromoteDemote || canTransferHost;
           const userTag = `@${p.displayName.toLowerCase().replace(/[^a-z0-9]/g, '')}#${p.id.slice(-4)}`;
           const avatar = getUserAvatar(p.id, p.displayName);
 
@@ -176,42 +180,48 @@ export const ParticipantList: React.FC<ParticipantListProps> = ({
                 </div>
               </div>
 
-              {/* Host management actions: Always visible on touch/mobile, hover on desktop */}
-              {canManage && (
+              {/* Management actions: Always visible on touch/mobile, hover on desktop */}
+              {hasAnyAction && (
                 <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition">
-                  <button
-                    onClick={() => setConfirmTransferHostId(p.id)}
-                    className="p-1 rounded-lg text-slate-400 hover:text-amber-400 hover:bg-amber-500/10 transition"
-                    title="Transfer Host to this user"
-                  >
-                    <Crown className="w-3.5 h-3.5" />
-                  </button>
-
-                  {p.role === 'PARTICIPANT' ? (
+                  {canTransferHost && (
                     <button
-                      onClick={() => onAssignRole(p.id, 'MODERATOR')}
-                      className="p-1 rounded-lg text-slate-400 hover:text-purple-400 hover:bg-purple-500/10 transition"
-                      title="Promote to Moderator"
-                    >
-                      <ShieldCheck className="w-4 h-4" />
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => onAssignRole(p.id, 'PARTICIPANT')}
+                      onClick={() => setConfirmTransferHostId(p.id)}
                       className="p-1 rounded-lg text-slate-400 hover:text-amber-400 hover:bg-amber-500/10 transition"
-                      title="Demote to Participant"
+                      title="Transfer Host to this user"
                     >
-                      <ShieldX className="w-4 h-4" />
+                      <Crown className="w-3.5 h-3.5" />
                     </button>
                   )}
 
-                  <button
-                    onClick={() => setConfirmRemoveId(p.id)}
-                    className="p-1 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition"
-                    title="Remove participant"
-                  >
-                    <UserX className="w-4 h-4" />
-                  </button>
+                  {canPromoteDemote && (
+                    p.role === 'PARTICIPANT' ? (
+                      <button
+                        onClick={() => onAssignRole(p.id, 'MODERATOR')}
+                        className="p-1 rounded-lg text-slate-400 hover:text-purple-400 hover:bg-purple-500/10 transition"
+                        title="Promote to Moderator"
+                      >
+                        <ShieldCheck className="w-4 h-4" />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => onAssignRole(p.id, 'PARTICIPANT')}
+                        className="p-1 rounded-lg text-slate-400 hover:text-amber-400 hover:bg-amber-500/10 transition"
+                        title="Demote to Participant"
+                      >
+                        <ShieldX className="w-4 h-4" />
+                      </button>
+                    )
+                  )}
+
+                  {canRemove && (
+                    <button
+                      onClick={() => setConfirmRemoveId(p.id)}
+                      className="p-1 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition"
+                      title={isHost ? "Remove participant" : "Remove participant (as Moderator)"}
+                    >
+                      <UserX className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               )}
             </div>

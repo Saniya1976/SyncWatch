@@ -9,6 +9,13 @@ declare global {
   }
 }
 
+export interface FloatingReaction {
+  id: string;
+  emoji: string;
+  senderName?: string;
+  x: number;
+}
+
 interface VideoPlayerProps {
   playbackState: PlaybackState;
   userRole: Role;
@@ -16,6 +23,8 @@ interface VideoPlayerProps {
   onLocalPause?: (time: number) => void;
   onLocalSeek?: (time: number) => void;
   onVideoInfo?: (info: { title: string; duration: number }) => void;
+  reactions?: FloatingReaction[];
+  onSendReaction?: (emoji: string) => void;
 }
 
 function formatTime(seconds: number): string {
@@ -32,6 +41,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   onLocalPause,
   onLocalSeek,
   onVideoInfo,
+  reactions,
+  onSendReaction,
 }) => {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
@@ -159,13 +170,13 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         return;
       }
 
-      // YT.PlayerState.PLAYING = 1
-      if (state === 1) {
+      // Note: Deliberate Play/Pause by the Host or Moderator is initiated through
+      // the interactive video overlay or RoomControls buttons.
+      // We do NOT emit pause on iframe state change (2) because Chrome/Edge automatically
+      // pauses/throttles background iframes when switching browser tabs or windows,
+      // which would incorrectly stop the video for the entire watch party!
+      if (state === 1 && !playbackState.isPlaying) {
         onLocalPlayRef.current?.(currentTime);
-      }
-      // YT.PlayerState.PAUSED = 2
-      else if (state === 2) {
-        onLocalPauseRef.current?.(currentTime);
       }
     } catch (err) {
       console.warn('[YouTube Player] Error handling state change:', err);
@@ -288,6 +299,11 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         const elapsed = (Date.now() - playbackState.updatedAt) / 1000;
         const expectedTime = playbackState.currentTime + elapsed;
 
+        // Auto-resume if the browser throttled/paused the iframe while switching tabs or in background
+        if (typeof player.getPlayerState === 'function' && player.getPlayerState() !== 1 && typeof player.playVideo === 'function') {
+          player.playVideo();
+        }
+
         if (Math.abs(actualTime - expectedTime) > 2.0 && typeof player.seekTo === 'function') {
           isApplyingRemoteRef.current = true;
           player.seekTo(expectedTime, true);
@@ -406,6 +422,26 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         </div>
       )}
 
+      {/* Floating Animated Reaction Emojis on Key Moments */}
+      <div className="absolute inset-0 pointer-events-none z-30 overflow-hidden">
+        {reactions && reactions.map((r) => (
+          <div
+            key={r.id}
+            style={{ left: `${r.x}%`, bottom: '22%' }}
+            className="absolute flex flex-col items-center animate-reaction-float select-none pointer-events-none"
+          >
+            <span className="text-3xl sm:text-4xl filter drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)] transform hover:scale-125">
+              {r.emoji}
+            </span>
+            {r.senderName && (
+              <span className="text-[10px] font-bold text-white bg-black/70 px-1.5 py-0.5 rounded-full border border-white/20 mt-1 whitespace-nowrap shadow">
+                {r.senderName}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+
       {/* Floating On-Video Scrubber and Controls Bar (Directly on Video) */}
       <div
         className="absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/95 via-black/60 to-transparent px-3 py-2 space-y-1.5 transition-opacity duration-300 opacity-95 group-hover:opacity-100"
@@ -469,6 +505,26 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           </div>
 
           <div className="flex items-center gap-2 text-[11px] text-slate-400 font-mono">
+            {/* Quick Emoji Reaction Buttons on Key Moments */}
+            {onSendReaction && (
+              <div className="flex items-center gap-1 bg-black/60 border border-white/10 rounded-full px-2 py-0.5 backdrop-blur-sm">
+                {['🔥', '🍿', '❤️', '😂', '🎉', '👏'].map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSendReaction(emoji);
+                    }}
+                    className="hover:scale-135 transition transform text-xs sm:text-sm active:scale-90"
+                    title={`React ${emoji} to this moment!`}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {canControl ? (
               <span className="bg-red-500/20 text-red-300 border border-red-500/30 px-2 py-0.5 rounded-md text-[10px]">
                 CONTROLLER

@@ -460,6 +460,33 @@ export class MessageHandler {
       if (callback) callback({ success: true, data: message });
     });
 
+    // Live Reaction / Emoji Burst
+    socket.on('send_reaction', (payload: { roomCode: string; emoji: string }, callback?: (res: SocketAckResponse) => void) => {
+      const cleanCode = (payload?.roomCode || '').trim().toUpperCase();
+      const room = this.roomManager.getRoom(cleanCode);
+      if (!room) {
+        if (callback) callback({ success: false, error: 'Room does not exist' });
+        return;
+      }
+      const participant = room.getParticipant(socket.id);
+      if (!participant) {
+        if (callback) callback({ success: false, error: 'Participant not in room' });
+        return;
+      }
+
+      const rawEmoji = (payload?.emoji || '🔥').trim();
+      const emoji = rawEmoji.slice(0, 8);
+      const reactionEvent = {
+        id: crypto.randomUUID(),
+        emoji,
+        senderName: participant.displayName,
+        timestamp: Date.now(),
+      };
+
+      this.io.to(`room:${room.roomCode}`).emit('new_reaction', reactionEvent);
+      if (callback) callback({ success: true, data: reactionEvent });
+    });
+
     // End / Expire Room (Host only)
     socket.on('end_room', (payload: EndRoomPayload, callback?: (res: SocketAckResponse) => void) => {
       const room = this.roomManager.getRoom(payload?.roomCode);

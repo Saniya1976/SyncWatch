@@ -13,6 +13,7 @@ build
 # Misc
 .DS_Store
 *.pem
+prd.md
 
 # Debug
 npm-debug.log*

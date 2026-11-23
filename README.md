@@ -93,20 +93,20 @@ flowchart TD
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Host as Host / Moderator
+    actor Host as Host
     participant Client as Host Client
-    participant Server as Express / Socket.IO Server
-    participant Viewer as Viewer Client
-    actor Participant as Viewer
+    participant Server as Socket.IO Server
+    participant ViewerClient as Viewer Client
+    actor Viewer as Participant
 
-    Host->>Client: Clicks Play / Pause / Seek / Change Video
-    Client->>Server: Emits 'play' / 'pause' / 'seek' / 'change_video'
-    Server->>Server: Validate Actor Role & Room Membership
-    Server->>Server: Update Authoritative PlaybackState (currentTime, updatedAt)
-    Server->>Client: Broadcast 'sync_state'
-    Server->>Viewer: Broadcast 'sync_state'
-    Viewer->>Viewer: Apply state to YouTube Player (echo-flag locked)
-    Viewer->>Participant: Video plays synchronously
+    Host->>Client: Clicks Play, Pause, Seek, or Change Video
+    Client->>Server: Emits playback event with timestamp
+    Server->>Server: Validate actor permissions
+    Server->>Server: Update authoritative room state
+    Server->>Client: Broadcast sync_state
+    Server->>ViewerClient: Broadcast sync_state
+    ViewerClient->>ViewerClient: Apply state to YouTube Player
+    ViewerClient->>Viewer: Synchronized playback
 ```
 
 ---
@@ -118,21 +118,19 @@ sequenceDiagram
     autonumber
     actor Participant as Participant
     participant PClient as Participant Client
-    participant Server as Server
+    participant Server as Socket.IO Server
     participant HClient as Host Client
-    actor Host as Host / Moderator
+    actor Host as Host
 
-    Participant->>PClient: Selects action (e.g. Seek to 02:30) & clicks "Send Request"
-    PClient->>Server: Emits 'request_action' { actionType, payload }
-    Server->>Server: Validate participant & generate unique RequestId
-    Server->>HClient: Broadcast 'action_requested'
-    Host->>HClient: Reviews request in Approval Panel & clicks "Approve"
-    HClient->>Server: Emits 'approve_request' { requestId }
-    Server->>Server: Verify actor != requester (prevents self-approval)
-    Server->>Server: Execute requested action on playback state
-    Server->>Server: Mark request resolved
-    Server-->>PClient: Broadcast 'request_resolved' + 'sync_state'
-    Server-->>HClient: Broadcast 'request_resolved' + 'sync_state'
+    Participant->>PClient: Requests Seek or Change Video
+    PClient->>Server: Emits request_action
+    Server->>Server: Validate request and store in pending queue
+    Server->>HClient: Broadcast action_requested
+    Host->>HClient: Clicks Approve in Approval Panel
+    HClient->>Server: Emits approve_request
+    Server->>Server: Verify actor and apply to playback state
+    Server->>PClient: Broadcast request_resolved and sync_state
+    Server->>HClient: Broadcast request_resolved and sync_state
 ```
 
 ---

@@ -29,3 +29,27 @@
   background: #475569;
 }
 
+/* Floating Live Reaction Emoji Animation */
+@keyframes reactionFloat {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.6);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(0px) scale(1.15);
+  }
+  80% {
+    opacity: 0.95;
+    transform: translateY(-90px) scale(1.05);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-160px) scale(0.9);
+  }
+}
+
+.animate-reaction-float {
+  animation: reactionFloat 2.6s ease-out forwards;
+}
+
