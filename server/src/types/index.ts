@@ -38,6 +38,22 @@ export interface ParticipantSummary {
   isOnline: boolean;
 }
 
+export interface ChatMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  senderUsername?: string;
+  senderRole: Role;
+  text: string;
+  timestamp: number;
+  isSystem?: boolean;
+}
+
+export interface SendChatPayload {
+  roomCode: string;
+  text: string;
+}
+
 export interface RoomStateResponse {
   roomCode: string;
   hostId: string;
@@ -46,6 +62,8 @@ export interface RoomStateResponse {
   playbackState: PlaybackState;
   participants: ParticipantSummary[];
   pendingRequests: PendingActionRequest[];
+  chatMessages: ChatMessage[];
+  hostToken?: string;
 }
 
 export interface OperationErrorPayload {
@@ -61,6 +79,7 @@ export interface CreateRoomPayload {
 export interface JoinRoomPayload {
   roomCode: string;
   displayName: string;
+  hostToken?: string;
 }
 
 export interface LeaveRoomPayload {
@@ -93,6 +112,11 @@ export interface RemoveParticipantPayload {
   targetParticipantId: string;
 }
 
+export interface TransferHostPayload {
+  roomCode: string;
+  newHostParticipantId: string;
+}
+
 export interface RequestActionPayload {
   roomCode: string;
   actionType: ActionType;
@@ -102,6 +126,10 @@ export interface RequestActionPayload {
 export interface ResolveRequestPayload {
   roomCode: string;
   requestId: string;
+}
+
+export interface EndRoomPayload {
+  roomCode: string;
 }
 
 // Standard response callback

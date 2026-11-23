@@ -12,7 +12,8 @@
     "build": "npm run build:client && npm run build:server",
     "test": "node server/src/tests/integration.test.mjs",
     "start": "npm run start --prefix server",
-    "install:all": "npm install && npm install --prefix server && npm install --prefix client"
+    "install:all": "npm install --include=dev && npm install --include=dev --prefix server && npm install --include=dev --prefix client",
+    "render-build": "npm run install:all && npm run build"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

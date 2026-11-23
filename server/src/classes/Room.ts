@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { Participant } from './Participant.js';
 import {
   PlaybackState,
@@ -6,22 +7,27 @@ import {
   RoomStateResponse,
   ParticipantSummary,
   RequestStatus,
+  ChatMessage,
 } from '../types/index.js';
 
 export class Room {
   public readonly roomCode: string;
+  public hostToken: string;
   public hostId: string;
   public playbackState: PlaybackState;
   public participants: Map<string, Participant>;
   public pendingRequests: Map<string, PendingActionRequest>;
+  public chatMessages: ChatMessage[];
   public readonly createdAt: number;
 
-  constructor(roomCode: string, hostParticipant: Participant) {
+  constructor(roomCode: string, hostParticipant: Participant, hostToken?: string) {
     this.roomCode = roomCode;
+    this.hostToken = hostToken || crypto.randomUUID();
     this.hostId = hostParticipant.id;
     this.createdAt = Date.now();
     this.participants = new Map();
     this.pendingRequests = new Map();
+    this.chatMessages = [];
 
     // Default playback state (initial default sample video can be empty or a standard default)
     this.playbackState = {
@@ -61,6 +67,19 @@ export class Room {
     const participant = this.participants.get(participantId);
     if (!participant) return false;
     participant.setRole(newRole);
+    return true;
+  }
+
+  public transferHost(newHostId: string, newHostToken: string): boolean {
+    const newHost = this.participants.get(newHostId);
+    if (!newHost) return false;
+    const oldHost = this.participants.get(this.hostId);
+    if (oldHost) {
+      oldHost.setRole('MODERATOR');
+    }
+    newHost.setRole('HOST');
+    this.hostId = newHostId;
+    this.hostToken = newHostToken;
     return true;
   }
 
@@ -130,8 +149,16 @@ export class Room {
     return Array.from(this.pendingRequests.values());
   }
 
+  public addChatMessage(message: ChatMessage): void {
+    this.chatMessages.push(message);
+    if (this.chatMessages.length > 50) {
+      this.chatMessages.shift();
+    }
+  }
+
   public getStateResponse(forParticipantId: string): RoomStateResponse {
     const participant = this.participants.get(forParticipantId);
+    const isHost = forParticipantId === this.hostId;
     return {
       roomCode: this.roomCode,
       hostId: this.hostId,
@@ -143,6 +170,8 @@ export class Room {
       },
       participants: this.getParticipantsList(),
       pendingRequests: this.getPendingRequestsList(),
+      chatMessages: [...this.chatMessages],
+      hostToken: isHost ? this.hostToken : undefined,
     };
   }
 

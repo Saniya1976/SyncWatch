@@ -67,6 +67,38 @@ export class RoomService {
   }
 
   /**
+   * Transfers the Host role to another participant (Host only).
+   */
+  public transferHost(
+    room: Room,
+    actor: Participant,
+    newHostParticipantId: string
+  ): { success: boolean; newHost?: Participant; oldHost?: Participant; hostToken?: string; error?: string } {
+    if (actor.role !== 'HOST' || actor.id !== room.hostId) {
+      return { success: false, error: 'Unauthorized: Only the current Host can transfer host status.' };
+    }
+
+    const newHost = room.getParticipant(newHostParticipantId);
+    if (!newHost) {
+      return { success: false, error: 'Target participant not found in this room.' };
+    }
+
+    if (newHost.id === room.hostId) {
+      return { success: false, error: 'Target participant is already the Host.' };
+    }
+
+    const newHostToken = crypto.randomUUID();
+    room.transferHost(newHostParticipantId, newHostToken);
+
+    return {
+      success: true,
+      newHost,
+      oldHost: actor,
+      hostToken: newHostToken,
+    };
+  }
+
+  /**
    * Removes a participant from the room.
    */
   public removeParticipant(

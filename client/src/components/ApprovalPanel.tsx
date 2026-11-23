@@ -79,7 +79,7 @@ export const ApprovalPanel: React.FC<ApprovalPanelProps> = ({
         {pendingRequests.map((req) => (
           <div
             key={req.id}
-            className="flex items-center justify-between p-3 rounded-xl bg-slate-900 border border-slate-800 text-sm"
+            className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3 rounded-xl bg-slate-900 border border-slate-800 text-sm"
           >
             <div className="space-y-1">
               <div className="flex items-center gap-2">
