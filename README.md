@@ -2,7 +2,7 @@
 
 > A full-stack, real-time synchronized YouTube watch party application built with **React**, **Express**, **TypeScript**, and **Socket.IO**. Designed with authoritative backend playback state, strict role-based permission enforcement, and an interactive participant action-request approval queue.
 
-**Live Application Demo**: [https://syncwatch-party.onrender.com](https://syncwatch-party.onrender.com) *(Update with your deployed Render service URL)*
+**Live Application Demo**: [https://syncwatch-party-xqpr.onrender.com/](https://syncwatch-party-xqpr.onrender.com/)
 
 ---
 
